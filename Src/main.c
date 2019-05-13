@@ -43,7 +43,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #ifndef USER_ADC_BUFFER_SIZE
-#error  USER_ADC_BUFFER_SIZE macro undefined in STM32CubeMX project file
+#error  USER_ADC_BUFFER_SIZE macro is not defined in STM32CubeMX project file
 #endif
 /* USER CODE END PD */
 
@@ -62,9 +62,15 @@ TIM_HandleTypeDef htim7;
 TIM_HandleTypeDef htim8;
 
 /* USER CODE BEGIN PV */
-static uint16_t USER_ADC_Buffer[2 * USER_ADC_BUFFER_SIZE]; // Значения АЦП (два буфера)
-static uint32_t USER_ADC_Summa = 0; // Накопленная сумма вторичного усреднения
-static uint32_t USER_ADC_Count = 0; // Количество значений вторичного усреднения
+
+/** Значения АЦП (два буфера ПДП) */
+static uint16_t USER_ADC_Buffer[2 * USER_ADC_BUFFER_SIZE];
+
+/** Накопленная сумма вторичного усреднения */
+static uint32_t USER_ADC_Summa = 0;
+
+/** Количество значений вторичного усреднения */
+static uint32_t USER_ADC_Count = 0;
 
 /* USER CODE END PV */
 
@@ -89,8 +95,8 @@ static void USER_DMAHalfConvCplt(DMA_HandleTypeDef *hdma);
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
+  * @brief  Основная функция программы
+  * @retval Без возврата
   */
 int main(void)
 {
@@ -124,13 +130,9 @@ int main(void)
   MX_TIM7_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
-
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-	
 #ifdef USE_LL_DRIVER
+	/* Запуск работы АЦП и ЦАП с использованием функций нижнего уровня */
+
   /* Enable the ADC peripheral */
 	LL_ADC_Enable(ADC1);
     
@@ -152,17 +154,20 @@ int main(void)
   /* Enable the DAC peripheral */
 	LL_DAC_Enable(DAC1, DAC_CHANNEL_1);
     
-	fprintf(stderr, "ADC1 Channel 0, started via LL\r\n");
+	fprintf(stderr, "ADC1 channel 0 and DAC1 channel 1, started via LL\r\n");
 #else
-  /* Включаем опрос и сохранение значений датчиков АЦП в памяти (два буфера) */
+	/* Запуск работы АЦП и ЦАП с использованием функций уровня абстракции периферии */
+
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *)USER_ADC_Buffer, 2 * USER_ADC_BUFFER_SIZE);
-	
-	/* Включаем установку значений */
 	HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
     
-	fprintf(stderr, "ADC1 Channel 0, started via HAL\r\n");
+	fprintf(stderr, "ADC1 Channel 0 and DAC1 channel 1, started via HAL\r\n");
 #endif
+  /* USER CODE END 2 */
 
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+	
 	/* Включаем генерацию запросов преобразования */
   HAL_TIM_Base_Start(&htim8);
 	
@@ -427,8 +432,14 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-/* Вычисляем среднее значение, добавляем к вторичной сумме */
+/**
+  * @brief Усреднение данных в принятом буфере.
+  *
+  * Вычисляет среднее значение и добавляет его к сумме вторичного усреднения.
+  *
+  * @param Указатель на буфер
+  * @retval Среднее значение
+  */
 static uint16_t USER_ADC_ProcessData(const uint16_t *data)
 {
 	int i;
@@ -455,10 +466,13 @@ static uint16_t USER_ADC_ProcessData(const uint16_t *data)
 	
 #ifdef USE_LL_DRIVER
 /**
-  * @brief  DMA half transfer complete callback. 
-  * @param  hdma pointer to a DMA_HandleTypeDef structure that contains
-  *                the configuration information for the specified DMA module.
-  * @retval None
+  * @brief  Функция обратного вызова ПДП (для первой половины буфера).
+  *
+  * Данная функция вызывается модулем HAL_DMA при заполнении первой половины буфера АЦП.
+  * Осуществляет вычисление среднего значения с АЦП и его загрузку в ЦАП.
+  *
+  * @param  Указатель на дескриптор канала ПДП
+  * @retval Нет
   */
 static void USER_DMAHalfConvCplt(DMA_HandleTypeDef *hdma)   
 {
@@ -474,10 +488,13 @@ static void USER_DMAHalfConvCplt(DMA_HandleTypeDef *hdma)
 }
 
 /**
-  * @brief  DMA transfer complete callback. 
-  * @param  hdma pointer to a DMA_HandleTypeDef structure that contains
-  *                the configuration information for the specified DMA module.
-  * @retval None
+  * @brief  Функция обратного вызова ПДП (для второй половины буфера).
+  *
+  * Данная функция вызывается модулем HAL_DMA при заполнении второй половины буфера АЦП.
+  * Осуществляет вычисление среднего значения с АЦП и его загрузку в ЦАП.
+  *
+  * @param  Указатель на дескриптор канала ПДП
+  * @retval Нет
   */
 static void USER_DMAConvCplt(DMA_HandleTypeDef *hdma)   
 {
@@ -492,12 +509,15 @@ static void USER_DMAConvCplt(DMA_HandleTypeDef *hdma)
 	}
 }
 
-#else
+#else /* USE_LL_DRIVER */
 /**
-  * @brief  Regular conversion half DMA transfer callback in non blocking mode 
-  * @param  hadc pointer to a ADC_HandleTypeDef structure that contains
-  *         the configuration information for the specified ADC.
-  * @retval None
+  * @brief  Функция обратного вызова АЦП (для первой половины буфера).
+  *
+  * Данная функция вызывается модулем HAL_ADC при заполнении первой половины буфера АЦП.
+  * Осуществляет вычисление среднего значения с АЦП и его загрузку в ЦАП.
+  *
+  * @param  Указатель на дескриптор АЦП
+  * @retval Нет
   */
 void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 {
@@ -513,10 +533,13 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 }
 
 /**
-  * @brief  Regular conversion complete callback in non blocking mode 
-  * @param  hadc pointer to a ADC_HandleTypeDef structure that contains
-  *         the configuration information for the specified ADC.
-  * @retval None
+  * @brief  Функция обратного вызова АЦП (для второй половины буфера).
+  *
+  * Данная функция вызывается модулем HAL_ADC при заполнении второй половины буфера АЦП.
+  * Осуществляет вычисление среднего значения с АЦП и его загрузку в ЦАП.
+  *
+  * @param  Указатель на дескриптор АЦП
+  * @retval Нет
   */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
@@ -531,10 +554,16 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 	}
 }
 
-#endif
+#endif /* USE_LL_DRIVER */
 
-/* Истек интервал одного из установленных таймеров.
- */
+/**
+  * @brief  Функция периодического таймера.
+  *
+  * Данная функция вызывается раз в секунду для вывода среднего значения.
+  *
+  * @param  Указатель на дескриптор сработавшего таймера
+  * @retval Нет
+  */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim == &htim7)
@@ -567,8 +596,18 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	}
 }
 
-/* Вывод символа из стандартного потока в последовательный порт.
- */
+/**
+  * @brief  Вывод символа из стандартного потока в последовательный порт.
+  *
+  * Данная функция вызывается из стандартной библиотеки ввода-вывода (stdio)
+  * для каждого символа, передаваемого в поток stdout. Функция осуществляет
+  * буферизацию передаваемых данных до 126 символов или до получения одного
+  * из символов конца строки (CR or LF) и передачу буфера через виртуальный
+  * последовательный порт.
+  *
+  * @param  Выводимый символ
+  * @retval Выводимый символ (копия входного значения)
+  */
 int stdout_putchar(int ch) 
 {
 #if 1
@@ -627,8 +666,7 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 { 
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  fprintf(stderr, "Wrong parameter's value in file %s on line %u\r\n", file, line);
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
